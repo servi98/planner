@@ -99,7 +99,7 @@ h2.sec{font-family:var(--serif);font-size:17px;font-weight:normal;margin:0 0 12p
 .ring .readout{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
 .ring .clock{font-family:var(--serif);font-size:34px;font-variant-numeric:tabular-nums}
 .ring .mode{font-size:12px;color:var(--muted);margin-top:2px}
-.timerbtns{display:flex;gap:8px;justify-content:center}
+.timerbtns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .tlink{font-size:12.5px;color:var(--muted);margin-top:10px}
 .tlink b{color:var(--ink);font-weight:500}
 
@@ -523,6 +523,7 @@ function renderTimer(){
     '<div class="timerbtns">'+(!t?
       '<button class="btn solid" data-act="tstart" data-m="focus">Start focus</button><button class="btn" data-act="tstart" data-m="break">Break</button>':
       (t.paused?'<button class="btn solid" data-act="tresume">Resume</button>':'<button class="btn" data-act="tpause">Pause</button>')+
+      '<button class="btn" data-act="treset" title="Back to the full session, held until you resume">Reset</button>'+
       '<button class="btn" data-act="tstop">Stop</button>')+'</div>'+
     '<div class="tlink">'+(task&&task.text?"Counting toward <b>"+esc(task.text)+"</b>":
       (t?"Not linked to a task":"Sessions run "+S.settings.focusMin+" minutes"))+'</div>';
@@ -1168,6 +1169,8 @@ document.addEventListener("click",function(e){
     case "tstart": startTimer(b.dataset.m);break;
     case "tpause": S.timer.left=Math.max(0,Math.round((S.timer.endsAt-Date.now())/1000));S.timer.paused=true;save();renderTimer();break;
     case "tresume": S.timer.endsAt=Date.now()+S.timer.left*1000;S.timer.paused=false;save();renderTimer();break;
+    /* back to the top of the session and held there, keeping the mode and the linked task */
+    case "treset": S.timer.left=S.timer.dur;S.timer.paused=true;S.timer.endsAt=Date.now()+S.timer.dur*1000;save();renderTimer();break;
     case "tstop": S.timer=null;save();renderTimer();break;
     case "flow": openFlow();break;
     case "flowclose": case "scrim": closeFlow();break;
