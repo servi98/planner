@@ -263,10 +263,10 @@ table.hab th.wd.tod{color:var(--accent)}
 "use strict";
 
 /* ---------------- storage ---------------- */
-var KEY="planner.v1", ok=true, S=null, saveTimer=null;
+var KEY="planner.v1", DATA_V=2, ok=true, S=null, saveTimer=null;
 function blankTask(){return{text:"",est:0,done:0,ok:false}}
 function blankState(){return{
-  v:2,
+  v:DATA_V,
   settings:{name:"",evening:19,focusMin:25,breakMin:5,theme:"auto"},
   meta:{lastFlow:"",lastBackup:""},
   habits:[{id:"h1",name:"Deep work block",cue:"after the first coffee",arch:false,u:1},
@@ -924,6 +924,35 @@ function exportMd(){
   });
   download("planner-"+dkey(new Date())+".md",out.join("\n"),"text/markdown");
 }
+/* Restoring is meant to win. Every record in the backup is re-stamped to now, so
+   the next merge keeps it instead of quietly replacing it with the gist's older
+   copy, which is what used to happen. Records the gist has that the backup does
+   not are still kept, so a restore overwrites but never deletes. */
+function importState(d){
+  if(!d||typeof d!=="object"||!d.days||typeof d.days!=="object")throw new Error("not a backup");
+  function objs(o){
+    var out={};
+    if(o&&typeof o==="object"&&!Array.isArray(o))
+      Object.keys(o).forEach(function(k){if(o[k]&&typeof o[k]==="object")out[k]=o[k]});
+    return out;
+  }
+  var base=blankState(),now=Date.now(),s={
+    v:DATA_V,
+    settings:Object.assign(base.settings,d.settings||{}),
+    meta:Object.assign(base.meta,d.meta||{}),
+    habits:Array.isArray(d.habits)?d.habits.filter(function(h){return h&&h.id}):[],
+    days:objs(d.days),weeks:objs(d.weeks),months:objs(d.months),events:objs(d.events),timer:null
+  };
+  Object.keys(s.events).forEach(function(k){
+    s.events[k]=Array.isArray(s.events[k])?s.events[k].filter(function(x){return x&&x.id}):[];
+  });
+  function bump(o){if(o&&typeof o==="object")o.u=now}
+  bump(s.settings);
+  s.habits.forEach(bump);
+  ["days","weeks","months"].forEach(function(sec){Object.keys(s[sec]).forEach(function(k){bump(s[sec][k])})});
+  Object.keys(s.events).forEach(function(k){s.events[k].forEach(bump)});
+  S=s;save();applyTheme();render();
+}
 
 /* ---------------- sync ---------------- */
 /* Data lives in one private GitHub gist. Each day, week, month, event and habit
@@ -932,10 +961,23 @@ var SKEY="planner.sync", FILE="planner-data.json";
 var sync={token:"",gist:"",last:0}, syncState="off", syncMsg="", pushTimer=null, pulling=false;
 function loadSync(){try{var r=localStorage.getItem(SKEY);if(r)sync=JSON.parse(r)}catch(e){}}
 function saveSync(){try{localStorage.setItem(SKEY,JSON.stringify(sync))}catch(e){}}
-function payload(){return{v:2,settings:S.settings,habits:S.habits,days:S.days,weeks:S.weeks,months:S.months,events:S.events}}
+function payload(){return{v:DATA_V,settings:S.settings,habits:S.habits,days:S.days,weeks:S.weeks,months:S.months,events:S.events}}
 function newer(a,b){return((b&&b.u)||0)>((a&&a.u)||0)?b:a}
+/* Serialise with object keys sorted, so "did anything actually change" compares
+   content rather than the order two devices happened to accumulate their keys
+   in. Arrays keep their order, because for habits and events order is the data. */
+function stable(o){
+  if(o===null||typeof o!=="object")return JSON.stringify(o);
+  if(Array.isArray(o))return "["+o.map(function(x){var s=stable(x);return s===undefined?"null":s}).join(",")+"]";
+  var parts=[];
+  Object.keys(o).sort().forEach(function(k){
+    var s=stable(o[k]);
+    if(s!==undefined)parts.push(JSON.stringify(k)+":"+s);
+  });
+  return "{"+parts.join(",")+"}";
+}
 function mergeState(loc,rem){
-  var out={settings:newer(loc.settings,rem.settings)||loc.settings,habits:[],days:{},weeks:{},months:{},events:{}};
+  var out={v:DATA_V,settings:newer(loc.settings,rem.settings)||loc.settings,habits:[],days:{},weeks:{},months:{},events:{}};
   ["days","weeks","months"].forEach(function(sec){
     var seen={},a=loc[sec]||{},b=rem[sec]||{};
     Object.keys(a).forEach(function(k){seen[k]=1});
@@ -1016,13 +1058,13 @@ function syncNow(quiet){
       })}).then(function(g){sync.gist=g.id;sync.last=Date.now();saveSync();setSync("ok");render()});
     }
     var merged=mergeState(local,remote||{});
-    var mergedStr=JSON.stringify(merged);
-    if(mergedStr!==JSON.stringify(local)){
+    var mergedStr=JSON.stringify(merged),mergedCanon=stable(merged);
+    if(mergedCanon!==stable(local)){
       applyMerged(merged);
       try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}
       render();
     }
-    if(mergedStr!==JSON.stringify(remote||{})){
+    if(mergedCanon!==stable(remote||{})){
       return gh("/gists/"+sync.gist,{method:"PATCH",body:JSON.stringify({
         files:(function(o){o[FILE]={content:mergedStr};return o})({})
       })}).then(function(){sync.last=Date.now();saveSync();setSync("ok")});
@@ -1059,12 +1101,13 @@ document.addEventListener("input",function(e){
 });
 document.addEventListener("change",function(e){
   if(e.target.id==="importFile"&&e.target.files[0]){
-    var r=new FileReader();
+    var r=new FileReader(),input=e.target;
     r.onload=function(){
-      try{var d=JSON.parse(r.result);if(!d.days)throw 0;S=d;if(!S.events)S.events={};save();applyTheme();render()}
+      try{importState(JSON.parse(r.result))}
       catch(err){alert("That file is not a planner backup.")}
+      input.value="";
     };
-    r.readAsText(e.target.files[0]);
+    r.readAsText(input.files[0]);
   }
 });
 document.addEventListener("keydown",function(e){
@@ -1145,10 +1188,14 @@ document.addEventListener("click",function(e){
         {S.habits.forEach(function(x){if(x.id===b.dataset.h){x.del=true;stamp(x)}});save();render()}break;
     case "export": exportJson();break;
     case "md": exportMd();break;
-    case "importbtn": el("importFile").click();break;
+    case "importbtn":
+      if(sync.token&&!confirm("Sync is on. The backup will be restored here and pushed to your other device. Days recorded since the backup that are not in it are kept, not deleted. Continue?"))break;
+      el("importFile").click();break;
     case "reset":
-      if(confirm("This erases every entry on this computer. Export a backup first if you want one."))
-        {S=blankState();save();applyTheme();render()}break;
+      if(!confirm("This erases every entry on this computer. Export a backup first if you want one."))break;
+      if(sync.token&&confirm("Sync is still on, so the gist will put everything back within a minute. Turn sync off on this device too?"))
+        {clearTimeout(pushTimer);sync={token:"",gist:"",last:0};saveSync();setSync("off")}
+      S=blankState();save();applyTheme();render();break;
   }
 });
 
