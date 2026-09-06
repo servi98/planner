@@ -13,6 +13,26 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
 <style>
+/* Fonts ship with the app so the phone and the laptop render the same thing.
+   latin loads always; latin-ext only if a character in its range is used. */
+@font-face{font-family:Fraunces;font-style:normal;font-weight:400 700;font-display:swap;
+  src:url(fonts/fraunces-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:Fraunces;font-style:normal;font-weight:400 700;font-display:swap;
+  src:url(fonts/fraunces-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400 500;font-display:swap;
+  src:url(fonts/plex-sans-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400 500;font-display:swap;
+  src:url(fonts/plex-sans-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;
+  src:url(fonts/plex-mono-latin.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;
+  src:url(fonts/plex-mono-latin-ext.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
 :root{
   --paper:#EDEBE6; --surface:#F8F7F4; --sunk:#E3E1DA;
   --ink:#1B2430; --ink-2:#4A525E; --muted:#7E8590;
@@ -20,8 +40,9 @@
   --accent:#24564F; --accent-ink:#F4F7F5; --accent-soft:#D9E4E0;
   --amber:#B0741C; --amber-soft:#F0E2CB;
   --radius:10px;
-  --serif:"Hoefler Text","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
-  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --serif:Fraunces,"Hoefler Text","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:"IBM Plex Sans","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,"SF Mono",monospace;
   --shadow:0 1px 2px rgba(27,36,48,.06);
 }
 html[data-theme="dark"]{
@@ -58,6 +79,9 @@ nav.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
 .banner{background:var(--amber-soft);border:1px solid var(--amber);padding:10px 14px;border-radius:var(--radius);font-size:13.5px;margin-bottom:18px}
 
 .cols{display:grid;grid-template-columns:1fr 300px;gap:32px;align-items:start}
+/* grid items default to min-width:auto, which lets a wide row push the whole
+   column past its track and scroll the page sideways on a phone */
+.cols>*{min-width:0}
 @media(max-width:900px){.cols{grid-template-columns:1fr;gap:24px}}
 .card{background:var(--surface);border:1px solid var(--rule-soft);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);margin-bottom:18px}
 h2.sec{font-family:var(--serif);font-size:17px;font-weight:normal;margin:0 0 12px}
@@ -85,10 +109,12 @@ h2.sec{font-family:var(--serif);font-size:17px;font-weight:normal;margin:0 0 12p
 .check.on::after{content:"";width:9px;height:5px;border-left:2px solid var(--accent-ink);border-bottom:2px solid var(--accent-ink);transform:rotate(-45deg) translate(1px,-1px)}
 .est{font-size:11.5px;color:var(--muted);border:1px solid var(--rule);border-radius:99px;padding:1px 8px;flex:none}
 .est.set{color:var(--amber);border-color:var(--amber)}
-.dots{display:flex;gap:4px;flex:none}
-.dot{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--rule)}
-.dot.plan{border-color:var(--amber)}
-.dot.on{background:var(--amber);border-color:var(--amber)}
+/* the visible dot stays small, the button around it stays thumb-sized */
+.dots{display:flex;gap:1px;flex:none}
+.dot{width:22px;height:22px;flex:none;border-radius:50%;display:grid;place-items:center}
+.dot::before{content:"";width:11px;height:11px;border-radius:50%;border:1.5px solid var(--rule);box-sizing:border-box}
+.dot.plan::before{border-color:var(--amber)}
+.dot.on::before{background:var(--amber);border-color:var(--amber)}
 
 .timer{text-align:center}
 .ring{position:relative;width:168px;height:168px;margin:2px auto 10px}
@@ -97,7 +123,7 @@ h2.sec{font-family:var(--serif);font-size:17px;font-weight:normal;margin:0 0 12p
 .ring .prog{stroke:var(--amber);stroke-linecap:round;transition:stroke-dashoffset .3s linear}
 .ring.break .prog{stroke:var(--accent)}
 .ring .readout{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
-.ring .clock{font-family:var(--serif);font-size:34px;font-variant-numeric:tabular-nums}
+.ring .clock{font-family:var(--mono);font-size:34px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .ring .mode{font-size:12px;color:var(--muted);margin-top:2px}
 .timerbtns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .tlink{font-size:12.5px;color:var(--muted);margin-top:10px}
@@ -146,7 +172,7 @@ textarea{min-height:62px;line-height:1.55}
 .mcell{background:var(--surface);border:1px solid var(--rule-soft);border-radius:8px;padding:5px 6px;height:96px;vertical-align:top;overflow:hidden}
 .mcell.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .mcell.out{background:none;border-color:transparent}
-.mcell .num{font-family:var(--serif);font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.mcell .num{font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums;display:flex;justify-content:space-between;align-items:center}
 .mcell .num .s{font-size:9.5px;color:var(--muted);font-family:var(--sans)}
 .mcell .ev{font-size:10.5px;padding:1px 4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:700px){.mcell{height:72px}.mcell .ev{display:none}}
@@ -167,14 +193,14 @@ table.hab th.wd.tod{color:var(--accent)}
 .hstat b{color:var(--ink);font-weight:500}
 
 .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.stat .n{font-family:var(--serif);font-size:24px}
+.stat .n{font-family:var(--mono);font-size:24px;font-variant-numeric:tabular-nums}
 .stat .l{font-size:11.5px;color:var(--muted);line-height:1.35}
 .wins{margin:0;padding-left:17px;font-size:13.5px;color:var(--ink-2)}
 .wins li{margin-bottom:3px}
 
 .entry{border-bottom:1px solid var(--rule-soft);padding:13px 0}
 .entry:last-child{border:none}
-.entry .h{display:flex;gap:10px;align-items:baseline}
+.entry .h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
 .entry .dt{font-family:var(--serif);font-size:15px}
 .entry p{margin:5px 0 0;font-size:13.5px;color:var(--ink-2)}
 .entry .q{border-left:2px solid var(--rule);padding-left:10px}
@@ -212,7 +238,7 @@ table.hab th.wd.tod{color:var(--accent)}
 .syncbtn.on .led{background:var(--accent)}
 .syncbtn.busy .led{background:var(--amber)}
 .syncbtn.bad .led{background:#C4574B}
-.mono{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+.mono{font-family:var(--mono);font-size:12.5px}
 
 /* phone */
 @media(max-width:640px){
@@ -227,7 +253,7 @@ table.hab th.wd.tod{color:var(--accent)}
   /* the hint is too long to sit beside its label on a phone, so it gets its own line */
   .when{flex-wrap:wrap;gap:2px 8px}
   .when input{flex-basis:100%;font-size:13.5px}
-  .dot{width:14px;height:14px}
+  .dot::before{width:13px;height:13px}
   .check{width:20px;height:20px}
   .sc{width:30px;height:34px}
   .chip{padding:7px 13px}
@@ -577,7 +603,7 @@ function viewMonth(){
     var d=new Date(base.getFullYear(),base.getMonth(),day),k=dkey(d);keys.push(k);
     var r=S.days[k];
     row+='<td class="mcell'+(isToday(d)?" today":"")+'">'+
-      '<div class="num"><button data-act="goto" data-k="'+k+'" style="font-family:var(--serif)">'+day+'</button>'+
+      '<div class="num"><button data-act="goto" data-k="'+k+'" style="font-family:var(--mono);font-variant-numeric:tabular-nums">'+day+'</button>'+
       '<span class="s">'+(r&&r.score!=null?r.score:"")+'</span></div>'+
       eventList(k,2)+
       '<button class="addev" data-act="addev" data-k="'+k+'">+</button></td>';

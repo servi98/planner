@@ -1,4 +1,7 @@
-const CACHE = 'planner-shell-v6';
+const CACHE = 'planner-shell-v7';
+// Only the latin faces are precached. The latin-ext files are served from the
+// same folder and fetched on demand by unicode-range, then cached by the fetch
+// handler below, so the install cost stays at what English text actually needs.
 const ASSETS = [
   './',
   './index.html',
@@ -6,7 +9,10 @@ const ASSETS = [
   './icon-192.png',
   './icon-512.png',
   './icon-maskable-512.png',
-  './apple-touch-icon.png'
+  './apple-touch-icon.png',
+  './fonts/fraunces-latin.woff2',
+  './fonts/plex-sans-latin.woff2',
+  './fonts/plex-mono-latin.woff2'
 ];
 
 self.addEventListener('install', e => {
