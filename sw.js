@@ -1,4 +1,4 @@
-const CACHE = 'planner-shell-v10';
+const CACHE = 'planner-shell-v11';
 // Only the latin faces are precached. The latin-ext files are served from the
 // same folder and fetched on demand by unicode-range, then cached by the fetch
 // handler below, so the install cost stays at what English text actually needs.

@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Planner</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#F4F1EB" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#191714" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" id="themeColor" content="#F4F1EB">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -56,6 +55,18 @@ html[data-theme="dark"]{
   --amber:#D6A45C; --amber-soft:#2C2418;
   --danger:#E08D7B;
   --scrim:rgba(10,9,7,.6);
+  --shadow:none;
+}
+/* Night is the dark palette taken down again, for the hours after the evening
+   hour. Nothing here rises above 80% relative luminance. */
+html[data-theme="night"]{
+  --paper:#141210; --surface:#1B1815; --sunk:#100F0C;
+  --ink:#CFC7B8; --ink-2:#9E978A; --muted:#888072;
+  --rule:#2A2620; --rule-soft:#211E18;
+  --accent:#8494B0; --accent-ink:#11141A; --accent-soft:#1F2531;
+  --amber:#B98F4F; --amber-soft:#251F15;
+  --danger:#C47A6A;
+  --scrim:rgba(6,5,4,.66);
   --shadow:none;
 }
 *{box-sizing:border-box}
@@ -811,7 +822,8 @@ function viewSettings(){
         return '<option value="'+h+'"'+(s.evening===h?" selected":"")+'>'+(h>12?h-12:h)+' pm</option>'}).join("")+'</select>')+
     row("Focus session","Minutes",'<input class="line" type="number" min="5" max="90" data-set="focusMin" value="'+s.focusMin+'" style="width:78px">')+
     row("Short break","Minutes",'<input class="line" type="number" min="1" max="30" data-set="breakMin" value="'+s.breakMin+'" style="width:78px">')+
-    row("Theme","",'<select data-set="theme">'+["auto","light","dark"].map(function(t){
+    row("Theme","Auto turns to Night after your evening hour",
+      '<select data-set="theme">'+["auto","light","dark","night"].map(function(t){
       return '<option value="'+t+'"'+(s.theme===t?" selected":"")+'>'+t+'</option>'}).join("")+'</select>')+
     '</div><div class="card"><h2 class="sec">Your data</h2>'+
       '<p class="hint" style="margin-top:0">Everything stays in this browser profile on this laptop. Export now and then so nothing can be lost.</p>'+
@@ -1250,7 +1262,8 @@ document.addEventListener("input",function(e){
   else if(t.dataset.set){
     var k=t.dataset.set,v=t.value;
     if(k==="evening"||k==="focusMin"||k==="breakMin")v=+v;
-    S.settings[k]=v;stamp(S.settings);save();if(k==="theme")applyTheme();
+    /* evening moves the Night boundary, so it re-resolves the theme too */
+    S.settings[k]=v;stamp(S.settings);save();if(k==="theme"||k==="evening"){applyTheme();renderHeader()}
   }
 });
 document.addEventListener("change",function(e){
@@ -1295,7 +1308,8 @@ document.addEventListener("click",function(e){
       else{var c=parseKey(cursor);cursor=dkey(new Date(c.getFullYear(),c.getMonth()+(+b.dataset.n),1))}
       render();break;
     case "theme":
-      S.settings.theme=document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark";
+      var curT=document.documentElement.getAttribute("data-theme");
+      S.settings.theme=(curT==="dark"||curT==="night")?"light":"dark";
       save();applyTheme();renderHeader();break;
     case "check": var t1=taskAt(b.dataset.p);t1.ok=!t1.ok;save();render();break;
     case "est": var t2=taskAt(b.dataset.p);t2.est=(t2.est+1)%6;save();render();break;
@@ -1358,10 +1372,22 @@ document.addEventListener("click",function(e){
 });
 
 /* ---------------- theme and boot ---------------- */
-function applyTheme(){
+/* On auto, the evening hour turns the app to Night. Before it, the system
+   preference still decides, so Dark stays what you get in a dark room by day. */
+function resolveTheme(){
   var t=S.settings.theme;
-  if(t==="auto"){var dark=false;try{dark=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches}catch(e){}t=dark?"dark":"light"}
+  if(t!=="auto")return t;
+  if(new Date().getHours()>=S.settings.evening)return "night";
+  var dark=false;try{dark=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches}catch(e){}
+  return dark?"dark":"light";
+}
+var lastTheme="";
+function applyTheme(){
+  var t=resolveTheme();
   document.documentElement.setAttribute("data-theme",t);
+  var m=el("themeColor");
+  if(m){var p=getComputedStyle(document.documentElement).getPropertyValue("--paper").trim();if(p)m.setAttribute("content",p)}
+  var changed=t!==lastTheme;lastTheme=t;return changed;
 }
 S=load();
 if(!S.settings)S=blankState();
@@ -1374,6 +1400,8 @@ applyTheme();render();warn();
 window.addEventListener("scroll",onScroll,{passive:true});
 onScroll();
 setInterval(tick,500);
+/* so the evening hour arriving while the app is open actually turns it to Night */
+setInterval(function(){if(S.settings.theme==="auto"&&applyTheme())renderHeader()},60000);
 
 /* sync loop: pull on open, when the app comes back to the foreground, and once a minute */
 if(sync.token){
