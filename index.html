@@ -88,13 +88,19 @@ nav.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
    column past its track and scroll the page sideways on a phone */
 .cols>*{min-width:0}
 @media(max-width:900px){.cols{grid-template-columns:1fr;gap:24px}}
-.card{background:var(--surface);border:1px solid var(--rule-soft);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);margin-bottom:18px}
-h2.sec{font-family:var(--serif);font-size:17px;font-weight:normal;margin:0 0 12px}
+/* light separates on tone alone; dark needs a hairline, tone is not enough there.
+   Border stays present but transparent so the box geometry is identical either way. */
+.card{background:var(--surface);border:1px solid transparent;border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);margin-bottom:18px}
+html[data-theme="dark"] .card{border-color:var(--rule-soft)}
+/* card titles are labels, not headlines: the serif is reserved for the one
+   task and for dates, and nothing else on the page competes with them */
+h2.sec{font-family:var(--sans);font-size:12px;font-weight:500;color:var(--muted);
+  letter-spacing:.06em;text-transform:uppercase;margin:0 0 12px}
 .why{color:var(--muted);font-size:12.5px;margin:-6px 0 12px;line-height:1.45}
 .hint{font-size:12.5px;color:var(--muted);margin-top:10px}
 .tip{border-left:2px solid var(--rule);padding-left:10px;font-size:12.5px;color:var(--muted);margin:12px 0 0;line-height:1.5}
 
-.mit{border-top:2px solid var(--accent);padding-top:16px;margin-bottom:22px}
+.mit{border-top:2px solid var(--accent);margin-top:26px;padding-top:22px;margin-bottom:32px}
 .mit .lead{color:var(--muted);font-size:12.5px;margin-bottom:6px}
 .mit input.big{font-family:var(--serif);font-size:30px;line-height:1.25;width:100%;background:none;border:none;padding:0 0 4px}
 @media(max-width:600px){.mit input.big{font-size:24px}}
@@ -107,6 +113,9 @@ h2.sec{font-family:var(--serif);font-size:17px;font-weight:normal;margin:0 0 12p
 .task:last-child{border-bottom:none}
 .task input.txt{flex:1;min-width:60px;background:none;border:none;padding:4px 0}
 .task input.txt::placeholder{color:var(--muted);opacity:.6}
+/* nothing to estimate until there is something written, but the space is held
+   so the row does not jump sideways on the first keystroke */
+.task.empty .est,.task.empty .dots{visibility:hidden}
 .task.done input.txt{color:var(--muted);text-decoration:line-through}
 .check{width:17px;height:17px;border:1.5px solid var(--rule);border-radius:5px;flex:none;display:grid;place-items:center}
 .check:hover{border-color:var(--ink-2)}
@@ -222,7 +231,7 @@ table.hab th.wd.tod{color:var(--ink)}
 .sheet{background:var(--surface);border-radius:14px;max-width:620px;width:100%;max-height:92vh;overflow:auto;padding:26px 28px;border:1px solid var(--rule)}
 .sheet.narrow{max-width:400px}
 @media(max-width:600px){.sheet{padding:20px 18px}}
-.sheet h3{font-family:var(--serif);font-weight:normal;font-size:23px;margin:6px 0 4px}
+.sheet h3{font-family:var(--sans);font-weight:500;font-size:20px;letter-spacing:-.01em;margin:6px 0 4px}
 .sheet .lead{color:var(--muted);font-size:13.5px;margin:0 0 18px}
 .steps{display:flex;gap:5px;margin-bottom:16px}
 .steps i{height:3px;flex:1;background:var(--rule);border-radius:2px}
@@ -251,6 +260,7 @@ table.hab th.wd.tod{color:var(--ink)}
   header.top{padding:16px 0 8px}
   .datestack .dow{font-size:21px}
   .card{padding:15px 15px;margin-bottom:14px}
+  .mit{margin-top:16px;padding-top:18px;margin-bottom:24px}
   nav.tabs{margin-bottom:18px;position:sticky;top:0;background:var(--paper);z-index:10}
   nav.tabs button{padding:10px 12px}
   .task{padding:9px 0}
@@ -403,11 +413,34 @@ function taskRow(dk,group,i,ph){
   var t=D(dk)[group][i], path="task|"+dk+"|"+group+"|"+i, dots="";
   for(var j=0;j<5;j++)
     dots+='<button class="dot'+(j<t.done?" on":(j<t.est?" plan":""))+'" data-act="dot" data-p="'+path+'" data-i="'+j+'" title="Focus sessions finished"></button>';
-  return '<div class="task'+(t.ok?" done":"")+'">'+
+  return '<div class="task'+(t.ok?" done":"")+(t.text?"":" empty")+'">'+
     '<button class="check'+(t.ok?" on":"")+'" data-act="check" data-p="'+path+'" aria-label="Mark done"></button>'+
     '<input class="txt" data-task="'+path+'" value="'+esc(t.text)+'" placeholder="'+esc(ph)+'">'+
     '<button class="est'+(t.est?" set":"")+'" data-act="est" data-p="'+path+'" title="Sessions you expect it to take">'+(t.est?t.est+" est":"est")+'</button>'+
     '<div class="dots">'+dots+'</div></div>';
+}
+/* The loose list shows two empty rows, not five, and earns another whenever the
+   last one is written in. Counting from the last filled row rather than the
+   number of filled ones means an old record with a gap in it still shows
+   everything it holds. */
+function otherRowsHtml(dk){
+  var o=D(dk).other,last=-1,i,out="";
+  for(i=0;i<o.length;i++)if(o[i].text)last=i;
+  var n=Math.max(2,last+2);
+  while(o.length<n)o.push(blankTask());
+  for(i=0;i<n;i++)out+=taskRow(dk,"other",i,"");
+  return out;
+}
+/* Appends straight into the DOM rather than re-rendering, so the row you are
+   typing in keeps focus and the caret stays put. */
+function growOther(dk,i){
+  var cont=el("otherRows");if(!cont)return;
+  var shown=cont.children.length;
+  if(i!==shown-1)return;
+  var o=D(dk).other;
+  if(!o[i]||!o[i].text)return;
+  while(o.length<shown+1)o.push(blankTask());
+  cont.insertAdjacentHTML("beforeend",taskRow(dk,"other",shown,""));
 }
 function mitBlock(dk,label){
   var d=D(dk);
@@ -513,7 +546,7 @@ function viewToday(){
     '<div class="card"><h2 class="sec">Then these two</h2>'+
       taskRow(dk,"sec",0,"Second priority")+taskRow(dk,"sec",1,"Third priority")+'</div>'+
     '<div class="card"><h2 class="sec">Anything else</h2>'+
-      [0,1,2,3,4].map(function(i){return taskRow(dk,"other",i,"")}).join("")+
+      '<div id="otherRows">'+otherRowsHtml(dk)+'</div>'+
       '<p class="tip">If something here would take under two minutes, do it now instead of writing it down.</p></div>'+
     '<div class="card"><h2 class="sec">Closing the day</h2>'+
       '<label class="f">How productive did the day feel, 1 to 10</label>'+scoreRow(dk)+
@@ -1127,7 +1160,13 @@ function disconnectSync(){
 document.addEventListener("input",function(e){
   var t=e.target;
   if(t.dataset.bind)setBind(t.dataset.bind,t.value);
-  else if(t.dataset.task){taskAt(t.dataset.task).text=t.value;touchDay(t.dataset.task.split("|")[1]);save()}
+  else if(t.dataset.task){
+    taskAt(t.dataset.task).text=t.value;
+    var row=t.closest(".task");if(row)row.classList.toggle("empty",!t.value);
+    var tp=t.dataset.task.split("|");
+    if(tp[2]==="other")growOther(tp[1],+tp[3]);
+    touchDay(tp[1]);save();
+  }
   else if(t.dataset.set){
     var k=t.dataset.set,v=t.value;
     if(k==="evening"||k==="focusMin"||k==="breakMin")v=+v;
