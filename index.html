@@ -81,6 +81,15 @@ nav.tabs{display:flex;gap:2px;border-bottom:1px solid var(--rule);margin-bottom:
 nav.tabs button{padding:9px 14px;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
 nav.tabs button:hover{color:var(--ink)}
 nav.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs .ic,.moretab{display:none}
+.topbtns .ic{display:none}
+.topbtns .ic svg,nav.tabs .ic svg{width:20px;height:20px;display:block}
+.datestack .short{display:none}
+.morerow{display:flex;align-items:center;gap:12px;width:100%;padding:13px 2px;font-size:15px;
+  color:var(--ink);border-bottom:1px solid var(--rule-soft)}
+.morerow .ic svg{width:20px;height:20px;display:block;color:var(--muted)}
+.morerow.on{color:var(--accent)}
+.morerow.on .ic svg{color:var(--accent)}
 .banner{background:var(--sunk);border:1px solid var(--rule);padding:10px 14px;border-radius:var(--radius);font-size:13.5px;margin-bottom:18px}
 
 .cols{display:grid;grid-template-columns:1fr 300px;gap:32px;align-items:start}
@@ -228,6 +237,7 @@ table.hab th.wd.tod{color:var(--ink)}
 
 .scrim{position:fixed;inset:0;background:var(--scrim);display:grid;place-items:center;padding:18px;z-index:40}
 #modal2 .scrim{z-index:60}
+#more .scrim{z-index:70}
 .sheet{background:var(--surface);border-radius:14px;max-width:620px;width:100%;max-height:92vh;overflow:auto;padding:26px 28px;border:1px solid var(--rule)}
 .sheet.narrow{max-width:400px}
 @media(max-width:600px){.sheet{padding:20px 18px}}
@@ -261,8 +271,31 @@ table.hab th.wd.tod{color:var(--ink)}
   .datestack .dow{font-size:21px}
   .card{padding:15px 15px;margin-bottom:14px}
   .mit{margin-top:16px;padding-top:18px;margin-bottom:24px}
-  nav.tabs{margin-bottom:18px;position:sticky;top:0;background:var(--paper);z-index:10}
-  nav.tabs button{padding:10px 12px}
+  /* tab bar moves into the thumb zone */
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:30;margin:0;
+    display:grid;grid-template-columns:repeat(6,1fr);gap:0;overflow:visible;
+    background:var(--surface);border-top:1px solid var(--rule);border-bottom:none;
+    padding-bottom:env(safe-area-inset-bottom)}
+  nav.tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    padding:7px 1px 6px;font-size:9.5px;line-height:1.2;border-bottom:none;margin:0;
+    letter-spacing:.01em;min-height:52px}
+  nav.tabs button.on{color:var(--accent);border-bottom:none}
+  nav.tabs .ic{display:block}
+  nav.tabs button[data-v="settings"]{display:none}
+  nav.tabs .moretab{display:flex}
+  /* header keeps only the date and the sync badge once the page moves */
+  header.top{position:sticky;top:0;z-index:20;background:var(--paper)}
+  body.scrolled header.top{padding:0;min-height:44px;flex-wrap:nowrap;align-items:center;
+    border-bottom:1px solid var(--rule-soft)}
+  body.scrolled .datestack .dow,body.scrolled .datestack .full{display:none}
+  body.scrolled .datestack .short{display:block;font-size:14px;color:var(--ink);white-space:nowrap}
+  body.scrolled .topbtns .lbl{display:none}
+  body.scrolled .topbtns .ic{display:block}
+  body.scrolled .topbtns .btn{padding:7px 9px}
+  body.scrolled .syncbtn{padding:6px 4px;min-width:0;overflow:hidden}
+  body.scrolled #syncTxt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  body.scrolled .datestack{flex:none}
+  body.scrolled .topbtns{flex:none}
   .task{padding:9px 0}
   .task input.txt{padding:6px 0}
   /* the hint is too long to sit beside its label on a phone, so it gets its own line */
@@ -288,11 +321,11 @@ table.hab th.wd.tod{color:var(--ink)}
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="datestack"><div class="dow" id="hdrDow"></div><div class="full" id="hdrFull"></div></div>
+    <div class="datestack"><div class="dow" id="hdrDow"></div><div class="full" id="hdrFull"></div><div class="short" id="hdrShort"></div></div>
     <div class="topbtns">
       <button class="syncbtn" id="syncBtn" data-act="syncnow"><span class="led"></span><span id="syncTxt">Sync off</span></button>
-      <button class="btn solid" data-act="flow">Check in</button>
-      <button class="btn ghost" data-act="theme" id="themeBtn">Dark</button>
+      <button class="btn solid" data-act="flow" aria-label="Check in"><span class="ic" id="flowIc"></span><span class="lbl">Check in</span></button>
+      <button class="btn ghost" data-act="theme" id="themeBtn"><span class="ic" id="themeIc"></span><span class="lbl" id="themeLbl">Dark</span></button>
     </div>
   </header>
   <div id="warn"></div>
@@ -301,6 +334,7 @@ table.hab th.wd.tod{color:var(--ink)}
 </div>
 <div id="modal"></div>
 <div id="modal2"></div>
+<div id="more"></div>
 
 <script>
 (function(){
@@ -524,14 +558,46 @@ function missedTwice(hid){
 
 /* ---------------- views ---------------- */
 var TABS=[["today","Today"],["week","Week"],["month","Month"],["habits","Habits"],["history","History"],["settings","Settings"]];
-function renderTabs(){el("tabs").innerHTML=TABS.map(function(t){
-  return '<button data-act="tab" data-v="'+t[0]+'" class="'+(view===t[0]?"on":"")+'">'+t[1]+'</button>'}).join("")}
+/* Line icons for the phone tab bar. Stroked in currentColor so the active tab
+   picks up the accent and the rest stay in the substrate. */
+function svg(d,extra){return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+(extra||"")+'</svg>'}
+var ICON={
+  today:svg('<rect x="4" y="3" width="12" height="14" rx="2"/><path d="M7.5 8h5M7.5 11.5h3"/>'),
+  week:svg('<rect x="2.5" y="5" width="15" height="10" rx="1.5"/><path d="M7.5 5v10M12.5 5v10"/>'),
+  month:svg('<rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M8 8v9M13 8v9"/>'),
+  habits:svg('<path d="M3 6.5l1.8 1.8L8 5"/><path d="M3 13.5l1.8 1.8L8 12"/><path d="M11 7h6M11 14.5h6"/>'),
+  history:svg('<circle cx="10" cy="10" r="7"/><path d="M10 6v4.2l2.8 1.8"/>'),
+  settings:svg('<circle cx="10" cy="10" r="2.6"/><path d="M10 2.6v2M10 15.4v2M17.4 10h-2M4.6 10h-2M15.2 4.8l-1.4 1.4M6.2 13.8l-1.4 1.4M15.2 15.2l-1.4-1.4M6.2 6.2L4.8 4.8"/>'),
+  more:svg('<circle cx="4.5" cy="10" r="1.3" fill="currentColor" stroke="none"/><circle cx="10" cy="10" r="1.3" fill="currentColor" stroke="none"/><circle cx="15.5" cy="10" r="1.3" fill="currentColor" stroke="none"/>'),
+  flow:svg('<circle cx="10" cy="10" r="7.3"/><path d="M6.6 10.2l2.4 2.4 4.4-4.9"/>'),
+  sun:svg('<circle cx="10" cy="10" r="3.6"/><path d="M10 1.8v2.1M10 16.1v2.1M18.2 10h-2.1M3.9 10h-2.1M15.8 4.2l-1.5 1.5M5.7 14.3l-1.5 1.5M15.8 15.8l-1.5-1.5M5.7 5.7L4.2 4.2"/>'),
+  moon:svg('<path d="M16.2 11.8A6.8 6.8 0 018.2 3.8a7.2 7.2 0 108 8z"/>')
+};
+/* On the phone the last tab lives behind More, so the bar stays reachable. */
+var BAR_HIDDEN="settings";
+function renderTabs(){
+  el("tabs").innerHTML=TABS.map(function(t){
+    return '<button data-act="tab" data-v="'+t[0]+'" class="'+(view===t[0]?"on":"")+'" aria-label="'+esc(t[1])+'">'+
+      '<span class="ic">'+ICON[t[0]]+'</span><span class="lbl">'+t[1]+'</span></button>'}).join("")+
+    '<button data-act="more" class="moretab'+(view===BAR_HIDDEN?" on":"")+'" aria-label="More">'+
+      '<span class="ic">'+ICON.more+'</span><span class="lbl">More</span></button>';
+}
 function partOfDay(){var h=new Date().getHours();return h<12?"morning":h<S.settings.evening?"afternoon":"evening"}
 function renderHeader(){
-  var d=new Date();
+  var d=new Date(),dark=document.documentElement.getAttribute("data-theme")==="dark";
   el("hdrDow").textContent=S.settings.name?"Good "+partOfDay()+", "+S.settings.name:DOW[d.getDay()];
   el("hdrFull").textContent=longDate(d);
-  el("themeBtn").textContent=document.documentElement.getAttribute("data-theme")==="dark"?"Light":"Dark";
+  el("hdrShort").textContent=DOW[d.getDay()].slice(0,3)+" "+shortDate(d);
+  el("themeLbl").textContent=dark?"Light":"Dark";
+  el("themeIc").innerHTML=dark?ICON.sun:ICON.moon;
+  el("flowIc").innerHTML=ICON.flow;
+}
+/* The header gives up everything but the date and the sync badge once the page
+   moves, so the thumb zone and the reading area both stay clear. */
+var collapsed=false;
+function onScroll(){
+  var c=(window.pageYOffset||document.documentElement.scrollTop)>48;
+  if(c!==collapsed){collapsed=c;document.body.classList.toggle("scrolled",c)}
 }
 
 function viewToday(){
@@ -816,6 +882,20 @@ function saveEvent(){
   else list.push(stamp({id:"e"+Date.now()+Math.floor(Math.random()*99),text:text,time:time}));
   evEdit=null;save();renderEvent();render();
 }
+
+/* ---------------- more sheet ---------------- */
+var moreOpen=false;
+function renderMore(){
+  if(!moreOpen){el("more").innerHTML="";return}
+  var items=TABS.filter(function(t){return t[0]===BAR_HIDDEN});
+  el("more").innerHTML='<div class="scrim" data-act="morescrim"><div class="sheet narrow moresheet" role="dialog" aria-modal="true">'+
+    '<h3>More</h3>'+
+    items.map(function(t){
+      return '<button class="morerow'+(view===t[0]?" on":"")+'" data-act="tab" data-v="'+t[0]+'">'+
+        '<span class="ic">'+ICON[t[0]]+'</span>'+esc(t[1])+'</button>'}).join("")+
+    '<div class="sheetfoot"><span></span><button class="btn" data-act="moreclose">Close</button></div></div></div>';
+}
+function closeMore(){moreOpen=false;renderMore()}
 
 /* ---------------- guided check in ---------------- */
 var flow=null;
@@ -1185,7 +1265,7 @@ document.addEventListener("change",function(e){
   }
 });
 document.addEventListener("keydown",function(e){
-  if(e.key==="Escape"){if(evEdit){evEdit=null;renderEvent()}else if(flow)closeFlow();return}
+  if(e.key==="Escape"){if(moreOpen)closeMore();else if(evEdit){evEdit=null;renderEvent()}else if(flow)closeFlow();return}
   if(e.key==="Enter"&&evEdit&&(e.target.id==="evText"||e.target.id==="evTime")){saveEvent();return}
   if(e.key==="Enter"&&e.target.id==="capIn"){
     var v=e.target.value.trim();if(!v)return;
@@ -1205,7 +1285,9 @@ document.addEventListener("click",function(e){
     case "syncnow": syncNow();break;
     case "syncconnect": connectSync();break;
     case "syncoff": disconnectSync();break;
-    case "tab": view=b.dataset.v;cursor=dkey(new Date());render();window.scrollTo(0,0);break;
+    case "more": moreOpen=true;renderMore();break;
+    case "moreclose": case "morescrim": closeMore();break;
+    case "tab": view=b.dataset.v;cursor=dkey(new Date());closeMore();render();window.scrollTo(0,0);break;
     case "goto": cursor=b.dataset.k;view="today";render();window.scrollTo(0,0);break;
     case "shift": cursor=(+b.dataset.n)?dkey(addDays(parseKey(cursor),+b.dataset.n)):dkey(new Date());render();break;
     case "shiftm":
@@ -1289,6 +1371,8 @@ if(!S.habits)S.habits=[];
 if(S.timer&&!S.timer.paused&&S.timer.endsAt<Date.now())S.timer=null;
 loadSync();
 applyTheme();render();warn();
+window.addEventListener("scroll",onScroll,{passive:true});
+onScroll();
 setInterval(tick,500);
 
 /* sync loop: pull on open, when the app comes back to the foreground, and once a minute */
