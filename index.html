@@ -72,7 +72,7 @@ h2.sec{font-family:var(--serif);font-size:17px;font-weight:normal;margin:0 0 12p
 .mit input.big::placeholder{color:var(--muted);opacity:.6}
 .mit .row{display:flex;align-items:center;gap:13px;margin-top:8px;flex-wrap:wrap}
 .when{display:flex;align-items:center;gap:8px;margin-top:6px}
-.when input{flex:1;background:none;border:none;border-bottom:1px dashed var(--rule);padding:3px 0;font-size:14px;color:var(--ink-2)}
+.when input{flex:1;min-width:0;text-overflow:ellipsis;background:none;border:none;border-bottom:1px dashed var(--rule);padding:3px 0;font-size:14px;color:var(--ink-2)}
 
 .task{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--rule-soft)}
 .task:last-child{border-bottom:none}
@@ -224,6 +224,9 @@ table.hab th.wd.tod{color:var(--accent)}
   nav.tabs button{padding:10px 12px}
   .task{padding:9px 0}
   .task input.txt{padding:6px 0}
+  /* the hint is too long to sit beside its label on a phone, so it gets its own line */
+  .when{flex-wrap:wrap;gap:2px 8px}
+  .when input{flex-basis:100%;font-size:13.5px}
   .dot{width:14px;height:14px}
   .check{width:20px;height:20px}
   .sc{width:30px;height:34px}
