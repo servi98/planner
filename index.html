@@ -194,6 +194,11 @@ textarea{min-height:62px;line-height:1.55}
 .ev{display:block;width:100%;font-size:11.5px;line-height:1.35;padding:3px 6px;border-radius:5px;background:var(--sunk);color:var(--ink-2);margin-bottom:4px;border-left:2px solid var(--rule)}
 .ev .t{color:var(--muted);margin-right:4px}
 .ev.more{background:none;color:var(--muted);border:none;padding-left:0}
+/* a run squares off the edges it continues through, so consecutive days read as
+   one band rather than as repeated chips */
+.ev.contl{border-top-left-radius:0;border-bottom-left-radius:0;border-left:none;padding-left:8px}
+.ev.contr{border-top-right-radius:0;border-bottom-right-radius:0}
+.ev.span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dmit{font-size:11.5px;color:var(--ink-2);margin-top:auto;padding-top:6px;border-top:1px dotted var(--rule)}
 .dmit .sc2{color:var(--muted)}
 .addev{font-size:11.5px;color:var(--muted);padding:2px 0}
@@ -209,7 +214,17 @@ textarea{min-height:62px;line-height:1.55}
 .mcell .num{font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums;display:flex;justify-content:space-between;align-items:center}
 .mcell .num .s{font-size:9.5px;color:var(--muted);font-family:var(--sans)}
 .mcell .ev{font-size:10.5px;padding:1px 4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@media(max-width:700px){.mcell{height:72px}.mcell .ev{display:none}}
+/* single events do not fit a phone month cell, but a trip is the whole reason to
+   look at the month, so runs stay as a thin bar with the text dropped */
+@media(max-width:700px){
+  .mcell{height:72px}
+  .mcell .ev{display:none}
+  .mcell .ev.span{display:block;height:5px;padding:0;margin-bottom:2px;font-size:0;line-height:0;border-radius:3px}
+  .mcell .ev.span.contl{border-radius:0 3px 3px 0}
+  .mcell .ev.span.contr{border-radius:3px 0 0 3px}
+  .mcell .ev.span.contl.contr{border-radius:0}
+  .mcell .ev.span:not(.contl){border-left:2px solid var(--rule)}
+}
 
 .hwrap{overflow-x:auto}
 table.hab{border-collapse:separate;border-spacing:3px}
@@ -514,22 +529,49 @@ function scoreRow(dk){
   for(var i=1;i<=10;i++)o+='<button class="sc'+(d.score===i?" on":"")+'" data-act="score" data-k="'+dk+'" data-v="'+i+'">'+i+'</button>';
   return '<div class="scorerow">'+o+'</div>';
 }
-function sortedEvents(dk){
-  var evs=(S.events&&S.events[dk])?S.events[dk].filter(function(e){return e&&!e.del}):[];
-  evs.sort(function(a,b){return(a.time||"zz").localeCompare(b.time||"zz")});
-  return evs;
+/* A trip is one record, not one per day: the event lives under the day it starts
+   and may carry an "end". Absent end means a single day, which is every event
+   written before this existed. */
+function evEndOf(startKey,e){return(e.end&&e.end>startKey)?e.end:startKey}
+/* Everything covering this day, and where in its run the day falls. */
+function eventsOn(dk){
+  var out=[];
+  if(!S.events)return out;
+  Object.keys(S.events).forEach(function(k){
+    if(k>dk)return;
+    var list=S.events[k];
+    if(!list||!list.length)return;
+    list.forEach(function(e){
+      if(!e||e.del||!e.id)return;
+      var end=evEndOf(k,e);
+      if(end<dk)return;
+      out.push({e:e,start:k,end:end,span:end!==k,first:k===dk,last:end===dk});
+    });
+  });
+  /* runs first, so a limited cell keeps the trip rather than dropping it */
+  out.sort(function(a,b){
+    if(a.span!==b.span)return a.span?-1:1;
+    return ((a.e.time||"zz")+"|"+(a.e.text||"")).localeCompare((b.e.time||"zz")+"|"+(b.e.text||""));
+  });
+  return out;
 }
-function eventList(dk,limit){
-  var evs=sortedEvents(dk),shown=limit?evs.slice(0,limit):evs;
-  var out=shown.map(function(e){
-    return '<button class="ev" data-act="editev" data-k="'+dk+'" data-id="'+e.id+'">'+
-      (e.time?'<span class="t">'+esc(e.time)+'</span>':"")+esc(e.text)+'</button>'}).join("");
+function eventList(dk,limit,grid){
+  var evs=eventsOn(dk),shown=limit?evs.slice(0,limit):evs;
+  var out=shown.map(function(x){
+    var cls="ev"+(x.span?" span":"")+(x.first?"":" contl")+(x.last?"":" contr");
+    /* in a grid the name repeats at the head of each week so a long band stays readable */
+    var named=!grid||x.first||parseKey(dk).getDay()===1;
+    var body=named?((x.first&&x.e.time?'<span class="t">'+esc(x.e.time)+'</span>':"")+esc(x.e.text)):"&#8203;";
+    return '<button class="'+cls+'" data-act="editev" data-k="'+x.start+'" data-id="'+esc(x.e.id)+
+      '" title="'+esc(x.e.text)+'">'+body+'</button>';
+  }).join("");
   if(limit&&evs.length>limit)out+='<span class="ev more">+'+(evs.length-limit)+' more</span>';
   return out;
 }
 function evSummary(dk){
-  var evs=sortedEvents(dk);
-  return evs.length?evs.map(function(e){return esc((e.time?e.time+" ":"")+e.text)}).join(" &#183; "):"clear";
+  var evs=eventsOn(dk);
+  return evs.length?evs.map(function(x){
+    return esc((x.first&&x.e.time?x.e.time+" ":"")+x.e.text)}).join(" &#183; "):"clear";
 }
 
 /* ---------------- stats ---------------- */
@@ -679,7 +721,7 @@ function viewWeek(){
     var r=S.days[k],past=d<new Date()&&!isToday(d);
     cells+='<div class="daycol'+(isToday(d)?" today":(past?" past":""))+'">'+
       '<div class="dhead"><span class="dw">'+DOW[d.getDay()].slice(0,3)+'</span><span class="dn">'+d.getDate()+'</span></div>'+
-      eventList(k,4)+
+      eventList(k,4,true)+
       '<button class="addev" data-act="addev" data-k="'+k+'">+ event</button>'+
       '<div class="dmit">'+(r&&r.mit&&r.mit.text?esc(r.mit.text):'<span style="color:var(--muted)">no task set</span>')+
         (r&&r.score!=null?' <span class="sc2">'+r.score+'/10</span>':"")+
@@ -722,7 +764,7 @@ function viewMonth(){
     row+='<td class="mcell'+(isToday(d)?" today":"")+'">'+
       '<div class="num"><button data-act="goto" data-k="'+k+'" style="font-family:var(--mono);font-variant-numeric:tabular-nums">'+day+'</button>'+
       '<span class="s">'+(r&&r.score!=null?r.score:"")+'</span></div>'+
-      eventList(k,2)+
+      eventList(k,2,true)+
       '<button class="addev" data-act="addev" data-k="'+k+'">+</button></td>';
     if((lead+day)%7===0){rows+="<tr>"+row+"</tr>";row=""}
   }
@@ -872,7 +914,7 @@ function render(){
 var evEdit=null;
 function openEvent(k,id){
   var e=id?EV(k).filter(function(x){return x.id===id})[0]:null;
-  evEdit={k:k,id:id||null,text:e?e.text:"",time:e?e.time:""};
+  evEdit={k:k,id:id||null,text:e?e.text:"",time:e?e.time:"",end:(e&&e.end)?e.end:""};
   renderEvent();
 }
 function renderEvent(){
@@ -882,18 +924,33 @@ function renderEvent(){
     '<p class="lead">'+longDate(parseKey(evEdit.k))+'</p>'+
     '<label class="f">What</label><input class="line" id="evText" value="'+esc(evEdit.text)+'" placeholder="Committee meeting">'+
     '<label class="f">Time, if it has one</label><input class="line" id="evTime" value="'+esc(evEdit.time)+'" placeholder="09:30">'+
+    '<label class="f">Ends, if it runs more than a day</label>'+
+    '<input class="line" id="evEnd" type="date" value="'+esc(evEdit.end)+'" min="'+dkey(addDays(parseKey(evEdit.k),1))+'">'+
+    '<p class="hint">Leave this blank for a single day. Set it and the event runs as one band across the calendar.</p>'+
     '<div class="sheetfoot">'+(evEdit.id?'<button class="btn ghost del" data-act="evdel">Delete</button>':"<span></span>")+
     '<div style="display:flex;gap:8px"><button class="btn" data-act="evcancel">Cancel</button>'+
     '<button class="btn solid" data-act="evsave">Save</button></div></div></div></div>';
   var t=el("evText");if(t&&t.focus)t.focus();
 }
 function saveEvent(){
-  var tx=el("evText"),tm=el("evTime");
+  var tx=el("evText"),tm=el("evTime"),en=el("evEnd");
   var text=tx?tx.value.trim():"",time=tm?tm.value.trim():"";
+  var end=en?en.value.trim():"";
+  /* an end that is missing, malformed, or not after the start is just a single day */
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(end)||end<=evEdit.k)end="";
   if(!text){evEdit=null;renderEvent();return}
   var list=EV(evEdit.k);
-  if(evEdit.id)list.forEach(function(x){if(x.id===evEdit.id){x.text=text;x.time=time;stamp(x)}});
-  else list.push(stamp({id:"e"+Date.now()+Math.floor(Math.random()*99),text:text,time:time}));
+  if(evEdit.id)list.forEach(function(x){
+    if(x.id===evEdit.id){
+      x.text=text;x.time=time;
+      if(end)x.end=end;else delete x.end;
+      stamp(x);
+    }});
+  else{
+    var ne={id:"e"+Date.now()+Math.floor(Math.random()*99),text:text,time:time};
+    if(end)ne.end=end;
+    list.push(stamp(ne));
+  }
   evEdit=null;save();renderEvent();render();
 }
 
@@ -972,7 +1029,7 @@ function flowBody(s){
         '<p class="tip">Naming a specific time and place is the single strongest thing you can do to make a task actually happen. Put an estimate in sessions on each one. Three to five sessions is a realistic day.</p>'};
   }
   if(s.t==="day-confirm"){
-    var d3=D(k),ev=sortedEvents(k).length?evSummary(k):"";
+    var d3=D(k),ev=eventsOn(k).length?evSummary(k):"";
     return{h:"Here is what you decided",w:"Nothing to plan. Read it, then go.",
       b:'<p style="font-family:var(--serif);font-size:25px;margin:0 0 4px">'+esc(d3.mit.text)+'</p>'+
         (d3.when?'<p style="color:var(--ink-2);margin:0 0 12px">Starting '+esc(d3.when)+'</p>':"")+
@@ -1078,7 +1135,8 @@ function exportMd(){
     if(d.mit.text)out.push("Main task: "+d.mit.text+(d.mit.ok?" (done)":""));
     if(d.when)out.push("Planned start: "+d.when);
     tasksOf(d).slice(1).forEach(function(t){if(t.text)out.push("- ["+(t.ok?"x":" ")+"] "+t.text)});
-    if(sortedEvents(k).length)out.push("Events: "+sortedEvents(k).map(function(e){return(e.time?e.time+" ":"")+e.text}).join("; "));
+    if(eventsOn(k).length)out.push("Events: "+eventsOn(k).map(function(x){
+      return (x.first&&x.e.time?x.e.time+" ":"")+x.e.text+(x.span&&x.first?" (until "+x.end+")":"")}).join("; "));
     if(d.score!=null)out.push("Score: "+d.score+"/10");
     if(d.wentWell)out.push("Went well: "+d.wentWell);
     if(d.improve)out.push("Improve: "+d.improve);
@@ -1281,7 +1339,7 @@ document.addEventListener("change",function(e){
 });
 document.addEventListener("keydown",function(e){
   if(e.key==="Escape"){if(moreOpen)closeMore();else if(evEdit){evEdit=null;renderEvent()}else if(flow)closeFlow();return}
-  if(e.key==="Enter"&&evEdit&&(e.target.id==="evText"||e.target.id==="evTime")){saveEvent();return}
+  if(e.key==="Enter"&&evEdit&&(e.target.id==="evText"||e.target.id==="evTime"||e.target.id==="evEnd")){saveEvent();return}
   if(e.key==="Enter"&&e.target.id==="capIn"){
     var v=e.target.value.trim();if(!v)return;
     var ck=dkey(new Date());D(ck).capture.push(v);touchDay(ck);save();render();
