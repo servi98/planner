@@ -41,6 +41,11 @@
   --amber:#A9762A; --amber-soft:#F2E7D2;
   --danger:#9A3324;
   --scrim:rgba(32,30,27,.45);
+  /* Tints for concurrent multi-day runs. All sit at roughly the tone of --sunk,
+     so they separate one trip from another without any of them competing with
+     the one task. */
+  --band0:#EAE6DC; --band1:#DFE5EE; --band2:#E0E8E0; --band3:#F0E3D8; --band4:#E8E2EC;
+  --edge0:#C4BCA9; --edge1:#A2B1CA; --edge2:#A7BBA7; --edge3:#D3B295; --edge4:#BDAEC8;
   --radius:10px;
   --serif:Fraunces,"Hoefler Text","Palatino Linotype",Palatino,Georgia,serif;
   --sans:"IBM Plex Sans","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Arial,sans-serif;
@@ -55,6 +60,8 @@ html[data-theme="dark"]{
   --amber:#D6A45C; --amber-soft:#2C2418;
   --danger:#E08D7B;
   --scrim:rgba(10,9,7,.6);
+  --band0:#24211C; --band1:#1E242E; --band2:#1D2520; --band3:#2B2119; --band4:#25202A;
+  --edge0:#4E4739; --edge1:#3E4A5C; --edge2:#3C4E3F; --edge3:#5A4433; --edge4:#4B4055;
   --shadow:none;
 }
 /* Night is the dark palette taken down again, for the hours after the evening
@@ -67,6 +74,8 @@ html[data-theme="night"]{
   --amber:#B98F4F; --amber-soft:#251F15;
   --danger:#C47A6A;
   --scrim:rgba(6,5,4,.66);
+  --band0:#1C1A16; --band1:#181D25; --band2:#171E19; --band3:#211A14; --band4:#1D1922;
+  --edge0:#3D382E; --edge1:#323B4A; --edge2:#303F33; --edge3:#47372A; --edge4:#3C3345;
   --shadow:none;
 }
 *{box-sizing:border-box}
@@ -198,7 +207,12 @@ textarea{min-height:62px;line-height:1.55}
    one band rather than as repeated chips */
 .ev.contl{border-top-left-radius:0;border-bottom-left-radius:0;border-left:none;padding-left:8px}
 .ev.contr{border-top-right-radius:0;border-bottom-right-radius:0}
-.ev.span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev.span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--band);border-left-color:var(--edge)}
+.ev.span.t0{--band:var(--band0);--edge:var(--edge0)}
+.ev.span.t1{--band:var(--band1);--edge:var(--edge1)}
+.ev.span.t2{--band:var(--band2);--edge:var(--edge2)}
+.ev.span.t3{--band:var(--band3);--edge:var(--edge3)}
+.ev.span.t4{--band:var(--band4);--edge:var(--edge4)}
 .dmit{font-size:11.5px;color:var(--ink-2);margin-top:auto;padding-top:6px;border-top:1px dotted var(--rule)}
 .dmit .sc2{color:var(--muted)}
 .addev{font-size:11.5px;color:var(--muted);padding:2px 0}
@@ -538,6 +552,33 @@ function spanDays(a,b){return Math.round((parseKey(b)-parseKey(a))/864e5)+1}
 /* A quarter is longer than any trip and shorter than a mistyped year, which is
    the slip worth catching. Above it we ask rather than silently shortening. */
 var LONG_SPAN=92;
+/* Runs that overlap must never share a tint, or two trips in the same week read
+   as one. Greedy over runs ordered by start: each takes the lowest tint no run
+   it overlaps has already taken. Derived from the events themselves, so nothing
+   is stored and both devices land on the same colours. */
+var TINTS=5, evTint={};
+function assignTints(){
+  evTint={};
+  var runs=[];
+  Object.keys(S.events||{}).forEach(function(k){
+    (S.events[k]||[]).forEach(function(e){
+      if(!e||e.del||!e.id)return;
+      var end=evEndOf(k,e);
+      if(end===k)return;                       /* single days stay neutral */
+      runs.push({id:e.id,start:k,end:end});
+    });
+  });
+  runs.sort(function(a,b){return a.start<b.start?-1:a.start>b.start?1:(a.id<b.id?-1:1)});
+  runs.forEach(function(r){
+    var used={};
+    runs.forEach(function(o){
+      if(o===r||evTint[o.id]===undefined)return;
+      if(o.start<=r.end&&r.start<=o.end)used[evTint[o.id]]=1;
+    });
+    var i=0;while(used[i])i++;
+    evTint[r.id]=i%TINTS;
+  });
+}
 /* Everything covering this day, and where in its run the day falls. */
 function eventsOn(dk){
   var out=[];
@@ -563,7 +604,7 @@ function eventsOn(dk){
 function eventList(dk,limit,grid){
   var evs=eventsOn(dk),shown=limit?evs.slice(0,limit):evs;
   var out=shown.map(function(x){
-    var cls="ev"+(x.span?" span":"")+(x.first?"":" contl")+(x.last?"":" contr");
+    var cls="ev"+(x.span?" span t"+(evTint[x.e.id]||0):"")+(x.first?"":" contl")+(x.last?"":" contr");
     /* in a grid the name repeats at the head of each week so a long band stays readable */
     var named=!grid||x.first||parseKey(dk).getDay()===1;
     var body=named?((x.first&&x.e.time?'<span class="t">'+esc(x.e.time)+'</span>':"")+esc(x.e.text)):"&#8203;";
@@ -769,7 +810,7 @@ function viewMonth(){
     row+='<td class="mcell'+(isToday(d)?" today":"")+'">'+
       '<div class="num"><button data-act="goto" data-k="'+k+'" style="font-family:var(--mono);font-variant-numeric:tabular-nums">'+day+'</button>'+
       '<span class="s">'+(r&&r.score!=null?r.score:"")+'</span></div>'+
-      eventList(k,2,true)+
+      eventList(k,3,true)+
       '<button class="addev" data-act="addev" data-k="'+k+'">+</button></td>';
     if((lead+day)%7===0){rows+="<tr>"+row+"</tr>";row=""}
   }
@@ -907,6 +948,7 @@ function viewSettings(){
 }
 
 function render(){
+  assignTints();
   renderTabs();renderHeader();warn();
   el("view").innerHTML = view==="today"?viewToday(): view==="week"?viewWeek(): view==="month"?viewMonth():
                 view==="habits"?viewHabits(): view==="history"?viewHistory(): viewSettings();
