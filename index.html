@@ -968,50 +968,66 @@ function renderEvent(){
   if(!evEdit){el("modal2").innerHTML="";return}
   el("modal2").innerHTML='<div class="scrim" data-act="evscrim"><div class="sheet narrow">'+
     '<h3>'+(evEdit.id?"Edit event":"New event")+'</h3>'+
-    '<p class="lead">'+longDate(parseKey(evEdit.k))+'</p>'+
     '<label class="f">What</label><input class="line" id="evText" value="'+esc(evEdit.text)+'" placeholder="Committee meeting">'+
     '<label class="f">Time, if it has one</label><input class="line" id="evTime" value="'+esc(evEdit.time)+'" placeholder="09:30">'+
-    '<label class="f">Ends, if it runs more than a day</label>'+
-    '<input class="line" id="evEnd" type="date" value="'+esc(evEdit.end)+'" min="'+dkey(addDays(parseKey(evEdit.k),1))+'">'+
-    '<p class="hint" id="evSpan">'+esc(evSpanText(evEdit.end))+'</p>'+
+    '<div class="pair"><div><label class="f">Starts</label>'+
+      '<input class="line" id="evStart" type="date" value="'+esc(evEdit.k)+'"></div>'+
+    '<div><label class="f">Ends</label>'+
+      '<input class="line" id="evEnd" type="date" value="'+esc(evEdit.end)+'" min="'+dkey(addDays(parseKey(evEdit.k),1))+'"></div></div>'+
+    '<p class="hint" id="evSpan">'+esc(evSpanText(evEdit.k,evEdit.end))+'</p>'+
     '<div class="sheetfoot">'+(evEdit.id?'<button class="btn ghost del" data-act="evdel">Delete</button>':"<span></span>")+
     '<div style="display:flex;gap:8px"><button class="btn" data-act="evcancel">Cancel</button>'+
     '<button class="btn solid" data-act="evsave">Save</button></div></div></div></div>';
   var t=el("evText");if(t&&t.focus)t.focus();
 }
 /* Live readout under the end field, so a mistyped year is visible before saving. */
-function evSpanText(v){
-  if(!evEdit)return "";
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(v)||v<=evEdit.k)
-    return "Leave blank for a single day. Set it and the event runs as one band across the calendar.";
-  var n=spanDays(evEdit.k,v);
-  return n+" days, "+shortDate(parseKey(evEdit.k))+" to "+longDate(parseKey(v))+"."+
+function evSpanText(start,end){
+  if(!evEdit||!/^\d{4}-\d{2}-\d{2}$/.test(start))return "";
+  var moved=start!==evEdit.k?" Moving from "+shortDate(parseKey(evEdit.k))+".":"";
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(end)||end<=start)
+    return longDate(parseKey(start))+". Set an end date to run it as one band across the calendar."+moved;
+  var n=spanDays(start,end);
+  return n+" days, "+shortDate(parseKey(start))+" to "+longDate(parseKey(end))+"."+moved+
     (n>LONG_SPAN?" That is longer than a quarter, so check the year is right.":"");
 }
-function saveEvent(){
-  var tx=el("evText"),tm=el("evTime"),en=el("evEnd");
-  var text=tx?tx.value.trim():"",time=tm?tm.value.trim():"";
-  var end=en?en.value.trim():"";
-  /* an end that is missing, malformed, or not after the start is just a single day */
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(end)||end<=evEdit.k)end="";
-  if(!text){evEdit=null;renderEvent();return}
-  /* Only when the end just changed, so editing the name of a long event that was
-     already confirmed does not ask again. Cancelling leaves the sheet open to fix. */
-  if(end&&end!==evEdit.end&&spanDays(evEdit.k,end)>LONG_SPAN&&
-     !confirm('"'+text+'" would run '+spanDays(evEdit.k,end)+" days, ending "+longDate(parseKey(end))+
-              ".\n\nThat is longer than a quarter. Check the year is right."))return;
-  var list=EV(evEdit.k);
-  if(evEdit.id)list.forEach(function(x){
-    if(x.id===evEdit.id){
-      x.text=text;x.time=time;
-      if(end)x.end=end;else delete x.end;
-      stamp(x);
-    }});
-  else{
-    var ne={id:"e"+Date.now()+Math.floor(Math.random()*99),text:text,time:time};
+/* Writes the event under a day, reviving a tombstone of the same id if one is
+   already sitting there from an earlier move, rather than leaving two records
+   with one id in the same array. */
+function putEvent(key,id,text,time,end){
+  var list=EV(key),found=null;
+  list.forEach(function(x){if(x&&x.id===id)found=x});
+  if(found){
+    found.text=text;found.time=time;delete found.del;
+    if(end)found.end=end;else delete found.end;
+    stamp(found);
+  }else{
+    var ne={id:id,text:text,time:time};
     if(end)ne.end=end;
     list.push(stamp(ne));
   }
+}
+function saveEvent(){
+  var tx=el("evText"),tm=el("evTime"),en=el("evEnd"),sn=el("evStart");
+  var text=tx?tx.value.trim():"",time=tm?tm.value.trim():"";
+  var start=sn?sn.value.trim():"";
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(start))start=evEdit.k;
+  var end=en?en.value.trim():"";
+  /* an end that is missing, malformed, or not after the start is just a single day */
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(end)||end<=start)end="";
+  if(!text){evEdit=null;renderEvent();return}
+  /* Only when the run just changed, so renaming a long event that was already
+     confirmed does not ask again. Cancelling leaves the sheet open to fix. */
+  if(end&&(end!==evEdit.end||start!==evEdit.k)&&spanDays(start,end)>LONG_SPAN&&
+     !confirm('"'+text+'" would run '+spanDays(start,end)+" days, ending "+longDate(parseKey(end))+
+              ".\n\nThat is longer than a quarter. Check the year is right."))return;
+  var id=evEdit.id||("e"+Date.now()+Math.floor(Math.random()*99));
+  /* Moving days means leaving the old key, and a hard delete there would be
+     resurrected by the other device's copy on the next merge and show on both
+     dates. A tombstone with a fresh stamp loses to nothing and wins over the
+     stale copy, so the merge settles on one event on the new day by itself. */
+  if(evEdit.id&&start!==evEdit.k)
+    EV(evEdit.k).forEach(function(x){if(x&&x.id===evEdit.id){x.del=true;stamp(x)}});
+  putEvent(start,id,text,time,end);
   evEdit=null;save();renderEvent();render();
 }
 
@@ -1372,7 +1388,14 @@ function disconnectSync(){
 /* ---------------- listeners ---------------- */
 document.addEventListener("input",function(e){
   var t=e.target;
-  if(t.id==="evEnd"){var sp=el("evSpan");if(sp)sp.textContent=evSpanText(t.value);return}
+  if(t.id==="evEnd"||t.id==="evStart"){
+    var sn=el("evStart"),en=el("evEnd"),sp=el("evSpan");
+    var st=sn?sn.value:evEdit.k;
+    if(t.id==="evStart"&&en&&/^\d{4}-\d{2}-\d{2}$/.test(st))
+      en.setAttribute("min",dkey(addDays(parseKey(st),1)));
+    if(sp)sp.textContent=evSpanText(st,en?en.value:"");
+    return;
+  }
   if(t.dataset.bind)setBind(t.dataset.bind,t.value);
   else if(t.dataset.task){
     taskAt(t.dataset.task).text=t.value;
@@ -1401,7 +1424,7 @@ document.addEventListener("change",function(e){
 });
 document.addEventListener("keydown",function(e){
   if(e.key==="Escape"){if(moreOpen)closeMore();else if(evEdit){evEdit=null;renderEvent()}else if(flow)closeFlow();return}
-  if(e.key==="Enter"&&evEdit&&(e.target.id==="evText"||e.target.id==="evTime"||e.target.id==="evEnd")){saveEvent();return}
+  if(e.key==="Enter"&&evEdit&&(e.target.id==="evText"||e.target.id==="evTime"||e.target.id==="evEnd"||e.target.id==="evStart")){saveEvent();return}
   if(e.key==="Enter"&&e.target.id==="capIn"){
     var v=e.target.value.trim();if(!v)return;
     var ck=dkey(new Date());D(ck).capture.push(v);touchDay(ck);save();render();
