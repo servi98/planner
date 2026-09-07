@@ -284,7 +284,7 @@ table.hab th.wd.tod{color:var(--ink)}
   .mit{margin-top:16px;padding-top:18px;margin-bottom:24px}
   /* tab bar moves into the thumb zone */
   nav.tabs{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:30;margin:0;
-    display:grid;grid-template-columns:repeat(6,1fr);gap:0;overflow:visible;
+    display:grid;grid-template-columns:repeat(5,1fr);gap:0;overflow:visible;
     background:var(--surface);border-top:1px solid var(--rule);border-bottom:none;
     padding-bottom:env(safe-area-inset-bottom)}
   nav.tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
@@ -292,7 +292,7 @@ table.hab th.wd.tod{color:var(--ink)}
     letter-spacing:.01em;min-height:52px}
   nav.tabs button.on{color:var(--accent);border-bottom:none}
   nav.tabs .ic{display:block}
-  nav.tabs button[data-v="settings"]{display:none}
+  nav.tabs button[data-v="history"],nav.tabs button[data-v="settings"]{display:none}
   nav.tabs .moretab{display:flex}
   /* header keeps only the date and the sync badge once the page moves */
   header.top{position:sticky;top:0;z-index:20;background:var(--paper)}
@@ -584,13 +584,15 @@ var ICON={
   sun:svg('<circle cx="10" cy="10" r="3.6"/><path d="M10 1.8v2.1M10 16.1v2.1M18.2 10h-2.1M3.9 10h-2.1M15.8 4.2l-1.5 1.5M5.7 14.3l-1.5 1.5M15.8 15.8l-1.5-1.5M5.7 5.7L4.2 4.2"/>'),
   moon:svg('<path d="M16.2 11.8A6.8 6.8 0 018.2 3.8a7.2 7.2 0 108 8z"/>')
 };
-/* On the phone the last tab lives behind More, so the bar stays reachable. */
-var BAR_HIDDEN="settings";
+/* On the phone the two reference views live behind More, which leaves four
+   daily tabs with room to be hit properly. */
+var BAR_HIDDEN=["history","settings"];
+function inMore(v){return BAR_HIDDEN.indexOf(v)>=0}
 function renderTabs(){
   el("tabs").innerHTML=TABS.map(function(t){
     return '<button data-act="tab" data-v="'+t[0]+'" class="'+(view===t[0]?"on":"")+'" aria-label="'+esc(t[1])+'">'+
       '<span class="ic">'+ICON[t[0]]+'</span><span class="lbl">'+t[1]+'</span></button>'}).join("")+
-    '<button data-act="more" class="moretab'+(view===BAR_HIDDEN?" on":"")+'" aria-label="More">'+
+    '<button data-act="more" class="moretab'+(inMore(view)?" on":"")+'" aria-label="More">'+
       '<span class="ic">'+ICON.more+'</span><span class="lbl">More</span></button>';
 }
 function partOfDay(){var h=new Date().getHours();return h<12?"morning":h<S.settings.evening?"afternoon":"evening"}
@@ -899,7 +901,7 @@ function saveEvent(){
 var moreOpen=false;
 function renderMore(){
   if(!moreOpen){el("more").innerHTML="";return}
-  var items=TABS.filter(function(t){return t[0]===BAR_HIDDEN});
+  var items=TABS.filter(function(t){return inMore(t[0])});
   el("more").innerHTML='<div class="scrim" data-act="morescrim"><div class="sheet narrow moresheet" role="dialog" aria-modal="true">'+
     '<h3>More</h3>'+
     items.map(function(t){
