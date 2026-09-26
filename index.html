@@ -703,8 +703,12 @@ function onScroll(){
 
 function viewToday(){
   var dk=cursor,d=D(dk),date=parseKey(dk),wk=wkey(date),mk=mkey(date),w=W(wk),m=M(mk);
-  var head=isToday(date)?"":'<div class="banner">Viewing '+longDate(date)+
-    '. <button class="btn ghost sm" data-act="goto" data-k="'+dkey(new Date())+'">Back to today</button></div>';
+  /* The app header always shows the real date, so the day being looked at needs
+     saying here, and Today had no way to step a day without the calendar. */
+  var head='<div class="calhead"><h2>'+(isToday(date)?"Today":longDate(date))+'</h2><div>'+
+      '<button class="btn ghost sm" data-act="shift" data-n="-1">Previous</button> '+
+      '<button class="btn ghost sm" data-act="shift" data-n="0">Today</button> '+
+      '<button class="btn ghost sm" data-act="shift" data-n="1">Next</button></div></div>';
   var evs=eventList(dk);
   var cap=d.capture.map(function(c,i){
     return '<li>&#183; '+esc(c)+'<button class="x" data-act="capdel" data-k="'+dk+'" data-i="'+i+'" aria-label="Remove">&times;</button></li>'}).join("");
@@ -1430,6 +1434,38 @@ document.addEventListener("keydown",function(e){
     var ck=dkey(new Date());D(ck).capture.push(v);touchDay(ck);save();render();
   }
 });
+/* ---------------- swipe between days, weeks and months ---------------- */
+function navBy(dir){
+  if(view==="today")cursor=dkey(addDays(parseKey(cursor),dir));
+  else if(view==="week")cursor=dkey(addDays(parseKey(cursor),dir*7));
+  else if(view==="month"||view==="habits"){
+    var c=parseKey(cursor);cursor=dkey(new Date(c.getFullYear(),c.getMonth()+dir,1));
+  }else return false;
+  render();window.scrollTo(0,0);return true;
+}
+var swipe=null;
+document.addEventListener("touchstart",function(e){
+  swipe=null;
+  if(e.touches.length!==1)return;
+  if(moreOpen||evEdit||flow)return;
+  if(!/^(today|week|month|habits)$/.test(view))return;
+  /* the habit grid and the tab bar own their own horizontal gestures */
+  if(e.target.closest&&e.target.closest(".hwrap,nav.tabs,.scrim"))return;
+  /* mid-edit a horizontal drag is the caret, not a page turn */
+  var a=document.activeElement;
+  if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;
+  var t=e.touches[0];
+  swipe={x:t.clientX,y:t.clientY,at:Date.now()};
+},{passive:true});
+document.addEventListener("touchend",function(e){
+  var s=swipe;swipe=null;
+  if(!s||!e.changedTouches||!e.changedTouches.length)return;
+  var t=e.changedTouches[0],dx=t.clientX-s.x,dy=t.clientY-s.y;
+  if(Date.now()-s.at>600)return;                             /* a slow drag is not a swipe */
+  if(Math.abs(dx)<60||Math.abs(dx)<Math.abs(dy)*2)return;    /* too short, or really a scroll */
+  navBy(dx>0?-1:1);                                          /* drag right reveals what came before */
+},{passive:true});
+
 var STAMPING={check:1,est:1,dot:1,habit:1,score:1,shutdown:1,capadd:1,capdel:1};
 document.addEventListener("click",function(e){
   var b=e.target.closest("[data-act]");if(!b)return;
